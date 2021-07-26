@@ -809,6 +809,76 @@ class ClassLikeStringTest extends TestCase
                         return new ReflectionClass($s);
                     }',
             ],
+            'checkTemplateClassStringSubclassOfClass' => [
+                '<?php
+                    /**
+                     * @psalm-consistent-constructor
+                     */
+                    class Foo {}
+
+                    class FooClass extends Foo {}
+
+                    /**
+                     * @template T
+                     * @param class-string<T> $className
+                     * @return T
+                     *
+                     * @throws RuntimeException when unsupported class name is provided
+                     */
+                    function fooConstructor(string $className) {
+                        if (!is_subclass_of($className, Foo::class)) {
+                            throw new RuntimeException();
+                        }
+
+                        return new $className();
+                    }',
+            ],
+            'checkTemplateOfAbstractClassStringSubclassOfClass' => [
+                '<?php
+                    /**
+                     * @psalm-consistent-constructor
+                     */
+                    abstract class Foo {}
+                    class Bar extends Foo {}
+
+                    class FooBar extends Bar {}
+
+                    /**
+                     * @template T of Foo
+                     * @param class-string<T> $className
+                     * @return T
+                     *
+                     * @throws LogicException when unsupported class name is provided
+                     */
+                    function fooConstructor(string $className) {
+                        if (!is_subclass_of($className, Bar::class)) {
+                            throw new \LogicException();
+                        }
+
+                        return new $className();
+                    }',
+            ],
+            'checkTemplateOfInterfaceIsSubclassOfAnotherInterface' => [
+                '<?php
+                    interface Foo {}
+                    interface Bar {}
+
+                    class FooBar implements Foo, Bar {}
+
+                    /**
+                     * @template T of Foo
+                     * @param class-string<T> $className
+                     * @return T
+                     *
+                     * @throws \LogicException when unsupported class name is provided
+                     */
+                    function fooConstructor(string $className) {
+                        if (!is_subclass_of($className, Bar::class)) {
+                            throw new \LogicException();
+                        }
+                        return new $className();
+                    }',
+            ],
         ];
     }
 
@@ -946,6 +1016,38 @@ class ClassLikeStringTest extends TestCase
                         return $s;
                     }',
                 'error_message' => 'InvalidReturnStatement',
+            ],
+            'provideTemplatedArgumentOfWrongSubclass' => [
+                '<?php
+                    /**
+                     * @psalm-consistent-constructor
+                     */
+                    class Foo {}
+                    /**
+                     * @psalm-consistent-constructor
+                     */
+                    class Bar {}
+
+                    /**
+                     * @template T
+                     * @param class-string<T> $className
+                     * @return T
+                     *
+                     * @throws \LogicException when unsupported class name is provided
+                     */
+                    function foo(string $className) {
+                        if (!is_subclass_of($className, Foo::class)) {
+                            throw new \LogicException();
+                        }
+
+                        return new $className();
+                    }
+
+
+                    function baz(): Bar {
+                        return foo(Bar::class);
+                    }',
+                'error_message' => 'InvalidArgument',
             ],
         ];
     }
