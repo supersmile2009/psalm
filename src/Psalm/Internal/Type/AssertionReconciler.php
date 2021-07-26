@@ -9,6 +9,7 @@ use Psalm\Internal\Analyzer\TraitAnalyzer;
 use Psalm\Internal\Type\Comparator\AtomicTypeComparator;
 use Psalm\Internal\Type\Comparator\UnionTypeComparator;
 use Psalm\Issue\DocblockTypeContradiction;
+use Psalm\Issue\InvalidArgument;
 use Psalm\Issue\InvalidDocblock;
 use Psalm\Issue\TypeDoesNotContainNull;
 use Psalm\Issue\TypeDoesNotContainType;
@@ -1406,6 +1407,51 @@ class AssertionReconciler extends \Psalm\Type\Reconciler
                         return new Type\Union([
                             new TClassString('object', $acceptable_atomic_types[0]),
                         ]);
+                    }
+                }
+                if ($existing_var_type->isTemplatedClassString()) {
+                    /** @var Atomic\TTemplateParamClass $existing_var_type_part */
+                    foreach ($existing_var_type->getAtomicTypes() as $existing_var_type_part) {
+                        $new_type_part = clone $existing_var_type_part;
+                        $assertion_type = Atomic::create($assertion, null, $template_type_map);
+                        if (!$new_type_part->as_type instanceof TNamedObject) {
+                            $new_type_part->as = $assertion;
+                            $new_type_part->as_type = $assertion_type;
+                        } elseif (AtomicTypeComparator::isContainedBy(
+                            $codebase,
+                            $assertion_type,
+                            $existing_var_type_part->as_type
+                        )) {
+                            $new_type_part->as = $assertion;
+                            $new_type_part->as_type = $assertion_type;
+                        } elseif (!$new_type_has_interface_string && !$old_type_has_interface_string) {
+                            // When this branch is reached, it means something is wrong in types info.
+                            // Such combination of type's as_type and assertion type is impossible
+                            // (e. g. both of them are unrelated (abstract) classes)
+                            if ($code_location !== null) {
+                                if (IssueBuffer::accepts(
+                                    new InvalidArgument(
+                                        'Class cannot be of types "'.$assertion.'" and "'
+                                        .$existing_var_type_part->as_type->value.'" at the same time.',
+                                        $code_location,
+                                        null
+                                    ),
+                                    $suppressed_issues
+                                )) {
+                                    // fall through
+                                }
+                            }
+
+                            break;
+                        } else {
+                            $new_type_part->as_type->addIntersectionType($assertion_type);
+                        }
+                        $should_return = true;
+                        $new_type = new Type\Union([
+                            $new_type_part,
+                        ]);
+
+                        break;
                     }
                 }
             }
